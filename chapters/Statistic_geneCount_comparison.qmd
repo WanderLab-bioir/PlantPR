@@ -1,0 +1,539 @@
+# Design Project: Evolution of PR genes
+
+## Statistical Analysis of PR distributions across orders
+
+This script contains the code to generate the statistical plot comparing the gene count distributions across different families. This is done for every PR family. 
+
+#### Load in all the necessary libraries
+
+```{r}
+#| message: false
+#| eval: true
+#| warning: false
+
+library(here)
+library(dbplyr)
+library(tidyverse)
+library(readr)
+library(rotl)
+library(ape)
+library(ggtree)
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
+library(taxize) 
+library(ape) 
+library(viridis)
+library(forcats)
+library(patchwork) 
+
+set.seed(123)
+```
+
+## Data preparation
+
+### Inferring Genes from PR family representatives
+
+We start off by download gene families from PLAZA
+
+The objects created: families_dicots/monocots contain 3 columns. 1 with the gene id of a specific gene, and the other columns contain the family the gene belongs to, and the species it was found in. 
+
+
+```{r}
+#| eval: true
+
+families_dicots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# ", show_col_types = FALSE
+)
+colnames(families_dicots) <- c("family", "species", "gene_id")
+
+families_monocots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# ", show_col_types = FALSE
+)
+colnames(families_monocots) <- c("family", "species", "gene_id")
+
+families <- bind_rows(families_dicots, families_monocots)
+head(families)
+```
+
+### Defining the homologous groups
+
+Creating a dataframe that contains all the homologous gene families. We use this to search plaza and collect genes. The objective here is to "capture" all genes belonging to the PR families. How these homologous gene families were found is explained in the report. 
+
+```{r}
+#| eval: true
+
+pr_fam_names <- c("PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR6", "PR6", "PR7", "PR8",
+            "PR9", "PR10","PR10", "PR11", "PR12", "PR13", "PR14", "PR15",
+            "PR16", "PR17")
+
+monocots = data.frame(
+  prfam = pr_fam_names, 
+  family =          c("HOM05M000176", # PR1
+                      "HOM05M000021", # PR2
+                      "HOM05M000197", # PR3
+                      "HOM05M001261", # PR4
+                      "HOM05M000094", # PR5
+                      "HOM05M007126", "HOM05M000680","HOM05M000792", # PR6
+                      "HOM05M000024", # PR7
+                      "HOM05M000233", # PR8
+                      "HOM05M000005", # PR9
+                      "HOM05M000737","HOM05M004276", # PR10
+                      "HOM05M002226", # PR11
+                      "HOM05M011346", # PR12
+                      "HOM05D002484", # PR13
+                      "HOM05M000361", # PR14
+                      "HOM05M000050", # PR15
+                      "HOM05M000050", # PR16
+                      "HOM05M001084") # PR17
+)
+
+pr_fam_names <- c("PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR7", "PR8", "PR9", "PR10", "PR11", "PR12", "PR13", "PR14", "PR15",  "PR16", "PR17")
+
+dicots = data.frame(
+  prfam = pr_fam_names,
+  family = c("HOM05D000217",
+             "HOM05D000020",    # PR2
+             "HOM05D000242",
+            "HOM05D002072",
+            "HOM05D000102",
+            "HOM05D001004",     # PR6
+            "HOM05D000015",     # PR7
+            "HOM05D000662",
+            "HOM05D000044",
+            "HOM05D000322",      # PR10
+            "HOM05D000741",
+            "HOM05D002484",
+            "HOM05D007540",
+            "HOM05D000275",     #PR14
+            "HOM05D000052",
+            "HOM05D000052",
+            "HOM05D001524" )
+)
+```
+
+Here we join together the table with the gene ID's and the table with the representative homologous gene families. 
+The result is an extra column that contains whether the gene family is PR1, PR2, ... 
+
+```{r}
+#| warning: false
+
+monocots <- monocots %>%
+  inner_join(families_monocots)
+
+dicots <- dicots %>%
+  inner_join(families_dicots)
+
+pr_genes <- bind_rows(monocots, dicots)
+
+# remove family column 
+pr_genes <- pr_genes %>%
+  select(-family) 
+
+pr_genes <- unique(pr_genes)
+
+head(pr_genes)
+```
+
+Now we add extra info about every species. The result is a table with gene ID's, the PR families/species it belong to and extra info. 
+
+```{r}
+# Load species list from a file
+species_info <- read_delim("C:/Users/wande/Documents/Bioinformatics_2024-2025/Design_project/Design_project_Rsession/data/species_information.csv", delim = "\t", skip = 2, show_col_types = FALSE)
+
+colnames(species_info)[1] <- "species_name"
+species_list <- species_info$common_name
+
+pr_genes <- pr_genes |>
+  left_join(species_info, by = c("species" = "species_name"))
+
+# Order PR families in ascending order
+pr_genes$prfam <- factor(pr_genes$prfam, levels = unique(pr_fam_names))
+
+```
+
+## Phylogenetic Tree
+
+Building the tree for all the species. This is done to extract the order of the species. 
+
+```{r}
+tree <- ape::read.tree("C:/Users/wande/Documents/Bioinformatics_2024-2025/Design_project/Design_project_Rsession/data/Trees/tree_combined.nwk")
+
+# Generate the tree plot
+p_tree <- ggtree(tree) +
+  geom_tiplab(size = 2, align = TRUE, linesize = 0.5) +
+  theme_tree2()
+```
+
+## Gene counts
+
+Creating a table with the gene counts for every family.
+
+```{r}
+
+# Extract species order
+species_order <- rev(ggtree::get_taxa_name(p_tree))
+
+# Ensure species is a factor with the correct order
+pr_genes <- pr_genes |> 
+  mutate(species = factor(species, levels = species_order))
+
+gene_counts <- pr_genes |>
+ dplyr::count(species, prfam) |>
+ na.omit()
+
+gene_counts$log_n <- log(gene_counts$n + 1)
+```
+
+Adding taxonomic info to the species. Things like Class, Order,...
+
+```{r}
+# Load in the metadata
+plaza_metadata <- read.csv("C:/Users/wande/Documents/Bioinformatics_2024-2025/Design_project/Design_project_Rsession/data/species_metadata_PLAZA.tsv", sep = "\t")
+
+# Join gene_counts with plaza_metadata t
+gene_counts_extended <- gene_counts |>
+  left_join(plaza_metadata |> select(species, family, order, class), by = "species")
+``` 
+
+
+## Statistical analysis
+
+### Unfiltered analysis
+
+Start off by creating the function that will perform the statistical test. 
+
+```{r}
+
+#' Wrapper to compare distributions using Kruskal-Wallis + Dunn
+#'
+#' @param df A data frame with values and variables.
+#' @param var Character, name of column indicating variable levels.
+#' @param value Numeric, values to be used in comparisons.
+#'
+#' @return A data frame with CLD for each level.
+#' @noRd
+#' 
+cld_kw_dunn <- function(df, var = "type", value = "csum") {
+  
+    # Ensure grouping variable is a factor
+    # So we don't get coercing error. 
+    df[[var]] <- as.factor(df[[var]])
+    
+    # Perform Kruskal-Wallis test followed by a post-hoc Dunn's test
+    dunn <- FSA::dunnTest(
+        df[[value]] ~ df[[var]], method = "bh"
+    ) |>
+        purrr::pluck("res") |>
+        arrange(Z)
+    
+    # Get compact letter display (CLD)
+    cld <- rcompanion::cldList(
+        comparison = dunn$Comparison,
+        p.value = dunn$P.adj,
+        threshold = 0.05
+    )
+    
+    return(cld)
+}
+```
+
+
+Perform the statistical test per order AND PR family. 
+
+```{r}
+library(dplyr)
+library(purrr)
+
+# Run Dunn's test separately for each PR family
+cld_kw_order_prfam <- gene_counts_extended |>
+  group_split(prfam) |>  # Split data by PR family
+  map_df(~ {
+    cld <- cld_kw_dunn(.x, var = "order", value = "n")  # Apply function per PR family
+    cld$prfam <- unique(.x$prfam)  # Add PR family info
+    return(cld)
+  })
+
+# rename the order column
+cld_kw_order_prfam <- cld_kw_order_prfam |>
+  rename(order = Group)
+```
+
+Combine the gene counts with the letter codes
+
+```{r}
+gene_counts_letters <- gene_counts_extended %>%
+  left_join(cld_kw_order_prfam, by = c("order", "prfam"))
+```
+
+Preparation for plotting.
+
+```{r}
+
+# --- 1. Merge Class Information ---
+# Get unique order-class mapping, renaming 'class' to 'taxon_class' immediately
+order_class_map <- distinct(gene_counts_extended, order, taxon_class = class)
+
+
+
+# Add the 'taxon_class' column to the plotting data
+gene_counts_plot_data <- left_join(gene_counts_letters, order_class_map, by = "order")
+
+
+print(paste("Number of rows with non-NA taxon_class after join:",
+            sum(!is.na(gene_counts_plot_data$taxon_class))))
+if (sum(!is.na(gene_counts_plot_data$taxon_class)) == 0) {
+    warning("No orders in 'gene_counts_letters' matched orders in 'gene_counts_extended'. Check 'order' columns.")
+}
+
+# COMBINE PR15 AND PR16
+# Check if 'prfam' column exists and is a factor before attempting modification
+
+if (!is.factor(gene_counts_plot_data$prfam)) {
+    warning("'prfam' column is not a factor before combining. Converting it now.")
+    gene_counts_plot_data$prfam <- factor(gene_counts_plot_data$prfam)
+}
+
+gene_counts_plot_data <- gene_counts_plot_data %>%
+  mutate(prfam = fct_collapse(prfam, "PR15/16" = c("PR15", "PR16")))
+
+
+
+# --- 2. Order Factors by Class ---
+# Determine the correct order for the 'order' factor levels using the new column name
+order_levels <- order_class_map %>%
+  filter(!is.na(taxon_class)) %>% # Avoid issues if class is NA in the map
+  arrange(taxon_class, order) %>%
+  pull(order)
+
+# Apply the new factor levels to 'order'
+# Also ensure 'taxon_class' and 'prfam' are factors
+gene_counts_plot_data$order <- factor(gene_counts_plot_data$order, levels = order_levels)
+
+# Use the new name 'taxon_class' here
+gene_counts_plot_data$taxon_class <- factor(gene_counts_plot_data$taxon_class)
+
+
+
+# --- 3. Prepare labels for the letters on the right ---
+# Use the new data frame with ordered factors
+plot_labels <- gene_counts_plot_data %>%
+  group_by(order, prfam) %>%
+  summarise(
+    Letter = first(Letter),
+    .groups = 'drop'
+  ) %>%
+  mutate(y_pos = 0.35)
+
+# --- 4. Define Colors for Classes ---
+# Get unique class names using the new column name
+# Ensure we only get non-NA levels if any NAs exist
+unique_classes <- levels(droplevels(filter(gene_counts_plot_data, !is.na(taxon_class))$taxon_class))
+
+# Check if we found any classes
+if (length(unique_classes) == 0) {
+    warning("No valid class levels found for coloring. Did the join work?")
+    # Define a default color or stop if necessary
+    class_colors <- setNames("grey50", "default") # Fallback
+} else {
+   # Use the rainbow() function
+   class_colors <- setNames(rainbow(length(unique_classes)), unique_classes)
+   # --- End of change ---
+}
+```
+#### Plotting of all PR families
+
+Create the full plot, without filtering on significance. 
+
+```{r}
+# --- Create Plot ---
+
+p_stat_full <- ggplot(gene_counts_plot_data, aes(x = n, y = 0)) +
+
+  geom_boxplot(aes(fill = taxon_class), # Use taxon_class
+               outlier.shape = NA,
+               alpha = 0.7,
+               show.legend = TRUE) +
+
+  geom_jitter(aes(color = taxon_class), # Use taxon_class
+              height = 0.1,
+              width = 0,
+              alpha = 0.6,
+              size = 1.5,
+              show.legend = FALSE) +
+
+  geom_text(data = plot_labels,
+            aes(label = Letter, x = Inf, y = y_pos),
+            hjust = 1.1,
+            vjust = 0.5,
+            size = 3,
+            check_overlap = TRUE) +
+
+  facet_grid(order ~ prfam, scales = "free_x", switch = "y") +
+
+  scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0.05, 0.18))) +
+
+  # Add Manual Color Scales for Class
+  scale_fill_manual(values = class_colors, name = "Class", na.value = "grey80") +
+  scale_color_manual(values = class_colors, name = "Class", na.value = "grey80") +
+
+  theme_classic(base_size = ) +
+
+  theme(
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    strip.text.y.left = element_text(angle = 0, hjust = 1),
+    strip.placement = "outside",
+    strip.background = element_blank(),
+    panel.border = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey90", linewidth = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.spacing.y = unit(0.1, "lines"),
+    panel.spacing.x = unit(0.2, "lines"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.margin = margin(10, 10, 10, 10),
+    legend.position = "right"
+  ) +
+
+  labs(
+    x = "Number of Genes (n)"
+  )
+
+p_stat_full
+```
+### Filtered analysis
+
+Now we'll only keep the PR columns that show significant differences. We will also add the phylogenetic tree showing the evolutionary relationships of the orders plotted on the left. 
+
+```{r}
+gene_counts_plot_data_filtered <- gene_counts_plot_data %>%
+  group_by(prfam) %>%
+  filter(n_distinct(MonoLetter) > 1) %>%
+  ungroup()
+```
+
+
+#### Plotting of filtered PR families
+
+```{r}
+
+# To make sure only the significant PR families are plotted:
+valid_prfams <- unique(gene_counts_plot_data_filtered$prfam)
+plot_labels <- plot_labels %>% filter(prfam %in% valid_prfams)
+max_n <- max(gene_counts_plot_data_filtered$n)
+
+
+# Manually creating the order that we see in the phylogenetic tree:
+tip_order <- c(
+  "Cucurbitales", "Fagales", "Rosales", "Fabales", "Celastrales", "Malpighiales",
+  "Malvales", "Brassicales", "Sapindales", "Myrtales", "Vitales", "Dipsacales",
+  "Apiales", "Asterales", "Gentianales", "Solanales", "Lamiales", "Cornales",
+  "Ericales", "Caryophyllales", "Trochodendrales", "Proteales", "Ranunculales",
+  "Ceratophyllales", "Magnoliales", "Zingiberales", "Poales", "Arecales",
+  "Asparagales", "Dioscoreales", "Alismatales", "Amborellales", "Cupressales",
+  "Selaginellales", "Funariales", "Marchantiales", "Anthocerotales", "Charales", "Chlamydomonadales"
+)
+
+# use that to set your facet‐row factor levels
+gene_counts_plot_data_filtered$order <- 
+  factor(gene_counts_plot_data_filtered$order, levels = tip_order)
+
+# 4) Make plot 
+p_stat_filtered_ordered <- ggplot(gene_counts_plot_data_filtered, aes(x = n, y = 0)) +
+  
+  geom_boxplot(aes(fill = taxon_class, color = taxon_class),  # Use color and fill
+               outlier.shape = NA,
+               alpha = 0.7,
+               show.legend = FALSE) +  #  Important:  FALSE here
+  
+  geom_jitter(aes(color = taxon_class),  #  Use color
+              height = 0.1,
+              width = 0,
+              alpha = 0.6,
+              size = 1.5,
+              show.legend = TRUE) +  #  TRUE here (or in boxplot, but *not* both)
+  
+  geom_text(data = plot_labels,
+            aes(label = Letter, x = Inf, y = y_pos),
+            hjust = 1.1,
+            vjust = 0.5,
+            size = 3,
+            check_overlap = TRUE) +
+  
+  facet_grid(order ~ prfam, scales = "free_x", switch = "y") +
+  
+  scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0.05, 0.18))) +
+  
+  # --- Add Manual Color Scales for Class ---
+  # These scales will now use the rainbow colors defined above
+  scale_fill_manual(values = palette.colors(), name ="Class") +
+  scale_color_manual(values = palette.colors(), name ="Class") +  #  Crucial:  Same scale for both
+  
+  theme_classic(base_size = ) +
+  
+  theme(
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(margin = margin(t = 10), size = 12),
+    strip.text.y.left = element_text(angle = 0, hjust = 0, size = 12),
+    strip.text.x = element_text(size = 12),
+    strip.placement = "outside",
+    strip.background = element_blank(),
+    panel.border = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey90", linewidth = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.spacing.y = unit(0.1, "lines"),
+    panel.spacing.x = unit(0.3, "cm"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.margin = margin(10, 10, 10, 10),
+    legend.position = "right",
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 4))) +
+  
+  labs(
+    x = "Number of genes (n)"
+  ) +
+   coord_cartesian(clip = "off") 
+
+# Load in the structure of the Order tree. This tree represents the evolutionary relationships of all the orders that remain in the plot. 
+tree_text <- "((((((((((((((((((Brassicales,Malvales),Sapindales),Myrtales),((((Fagales,Cucurbitales),Rosales),Fabales),(Malpighiales,Celastrales))),Vitales),(((Ericales,Cornales),((Lamiales,(Solanales,Gentianales)),(Asterales,(Apiales,Dipsacales)))),Caryophyllales)),Trochodendrales),Proteales),Ranunculales),Ceratophyllales),Magnoliales),(((((Poales,Zingiberales),Arecales),Asparagales),Dioscoreales),Alismatales)),Amborellales),Cupressales),Selaginellales),(Anthocerotales,(Marchantiales,Funariales))),Charales),(Chlamydomonadales));"
+phy <- read.tree(text = tree_text)
+
+
+# Make your ggtree plot
+p_tree <- ggtree(phy, layout = "rectangular") +
+  # drop all margins and axes
+  theme_tree2() +
+  theme(
+    plot.margin = margin(t = 5, r = unit(-30, "pt"), b = 5, l = 5),
+    axis.line = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank()
+  )
+
+
+# 4. Combine them with patchwork
+#    Adjust the relative widths so the tree isn’t too tiny
+p_combined <- p_tree + p_stat_filtered_ordered + plot_layout(widths = c(0.3, 1))
+
+
+p_stat_filtered_ordered_tight <- p_stat_filtered_ordered +
+  theme(plot.margin = unit(c(5.5, 5.5, 5.5, -10), "pt")) # Adjust the negative value as needed
+
+p_stat_combined <- p_tree + p_stat_filtered_ordered_tight +
+  plot_layout(widths = c(0.3, 1))
+
+p_stat_combined
+```
