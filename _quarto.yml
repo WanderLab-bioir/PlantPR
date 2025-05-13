@@ -1,0 +1,26 @@
+project:
+  type: book
+
+book:
+  title: |
+    Code and data for "Evolution of pathogenesis-related proteins in plants"
+  author: 
+    - name: Wander Labaere
+    - name: 
+  date: "year"
+  chapters:
+    - index.qmd
+    - chapters/chapter_01.qmd
+    - chapters/chapter_02.qmd
+  
+bibliography: bibliography.bib
+
+execute:
+  freeze: auto
+
+format:
+  html:
+    theme: cosmo
+
+editor: 
+  mode: source

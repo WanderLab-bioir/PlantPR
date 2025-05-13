@@ -1,0 +1,15 @@
+{
+  "hash": "be78cfad33d651d1c4f2a47e83364f9e",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\nexecute: \n  echo: true\n  eval: false\n  warning: false\n---\n\n\n\n\n# Chapter title\n\n\n\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(here)\n\nset.seed(123) # for reproducibility\n```\n:::\n\n\n\n\n## Section 1\n\n\n## Section 2\n\n\n## Session info {.unnumbered}\n\nThis document was created under the following conditions:\n\n\n\n\n::: {.cell}\n::: {.cell-output .cell-output-stdout}\n\n```\n─ Session info ───────────────────────────────────────────────────────────────\n setting  value\n version  R version 4.4.2 (2024-10-31 ucrt)\n os       Windows 11 x64 (build 26100)\n system   x86_64, mingw32\n ui       RTerm\n language (EN)\n collate  English_Belgium.utf8\n ctype    English_Belgium.utf8\n tz       Europe/Brussels\n date     2025-05-13\n pandoc   3.2 @ C:/Program Files/RStudio/resources/app/bin/quarto/bin/tools/ (via rmarkdown)\n quarto   NA @ C:\\\\Users\\\\wande\\\\AppData\\\\Local\\\\Programs\\\\Quarto\\\\bin\\\\quarto.exe\n\n─ Packages ───────────────────────────────────────────────────────────────────\n package     * version date (UTC) lib source\n cli           3.6.4   2025-02-13 [1] CRAN (R 4.4.3)\n digest        0.6.37  2024-08-19 [1] CRAN (R 4.4.1)\n evaluate      1.0.3   2025-01-10 [1] CRAN (R 4.4.3)\n fastmap       1.2.0   2024-05-15 [1] CRAN (R 4.4.1)\n here        * 1.0.1   2020-12-13 [1] CRAN (R 4.4.2)\n htmltools     0.5.8.1 2024-04-04 [1] CRAN (R 4.4.1)\n htmlwidgets   1.6.4   2023-12-06 [1] CRAN (R 4.4.1)\n jsonlite      1.9.1   2025-03-03 [1] CRAN (R 4.4.3)\n knitr         1.50    2025-03-16 [1] CRAN (R 4.4.3)\n rlang         1.1.5   2025-01-17 [1] CRAN (R 4.4.3)\n rmarkdown     2.29    2024-11-04 [1] CRAN (R 4.4.2)\n rprojroot     2.0.4   2023-11-05 [1] CRAN (R 4.4.2)\n rstudioapi    0.17.1  2024-10-22 [1] CRAN (R 4.4.1)\n sessioninfo   1.2.3   2025-02-05 [1] CRAN (R 4.4.3)\n xfun          0.51    2025-02-19 [1] CRAN (R 4.4.3)\n yaml          2.3.10  2024-07-26 [1] CRAN (R 4.4.1)\n\n [1] C:/Users/wande/AppData/Local/R/win-library/4.4\n [2] C:/Program Files/R/R-4.4.2/library\n * ── Packages attached to the search path.\n\n──────────────────────────────────────────────────────────────────────────────\n```\n\n\n:::\n:::\n\n\n\n\n## References {.unnumbered}\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
