@@ -1,0 +1,523 @@
+Loading in the necessary libraries. 
+
+```{r here}
+#| error: true
+#| warning: false
+#| message: false
+
+library(here)
+library(dbplyr)
+library(tidyverse)
+library(readr)
+library(rotl)
+library(ape)
+library(ggtree)
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
+library(taxize)
+
+set.seed(123)
+```
+
+
+# Inferring Genes from PR family representatives
+
+## Download gene families from PLAZA
+
+families_dicots/monocots contain 3 columns. 1 with the gene id of a specific gene, and the other columns contain the family the gene belongs to, and the species it was found in. 
+
+```{r}
+#| error: true
+#| warning: false
+#| message: false
+
+families_dicots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# "
+)
+colnames(families_dicots) <- c("family", "species", "gene_id")
+
+families_monocots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# "
+)
+colnames(families_monocots) <- c("family", "species", "gene_id")
+
+families <- bind_rows(families_dicots, families_monocots)
+head(families)
+```
+The number of plants that we investigate in this paper.
+
+```{r}
+length(unique(families$species))
+```
+
+Creating a dataframe that contains all the homologous gene families. We use this to search plaza and collect genes. The objective here is to "capture" all genes belonging to the PR families.
+
+```{r}
+#| eval: true
+
+pr_fam_names <- c("PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR6", "PR6", "PR7", "PR8",
+            "PR9", "PR10","PR10", "PR11", "PR12", "PR13", "PR14", "PR15",
+            "PR16", "PR17")
+
+monocots = data.frame(
+  prfam = pr_fam_names,
+  family =          c("HOM05M000176",
+                      "HOM05M000021",
+                      "HOM05M000197",
+                      "HOM05M001261",
+                      "HOM05M000094",
+                      "HOM05M007126", "HOM05M000680","HOM05M000792",
+                      "HOM05M000024",
+                      "HOM05M000233",
+                      "HOM05M000005",
+                      "HOM05M000737","HOM05M004276",
+                      "HOM05M002226",
+                      "HOM05M011346",
+                      "HOM05D002484",
+                      "HOM05M000361",
+                      "HOM05M000050",
+                      "HOM05M000050",
+                      "HOM05M001084" )
+)
+
+pr_fam_names <- c("PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR7", "PR8", "PR9", "PR10", "PR11", "PR12", "PR13", "PR14", "PR15",  "PR16", "PR17")
+
+dicots = data.frame(
+  prfam = pr_fam_names,
+  family = c("HOM05D000217",
+             "HOM05D000020",
+             "HOM05D000242",
+            "HOM05D002072",
+            "HOM05D000102",
+            "HOM05D001004",
+            "HOM05D000015",
+            "HOM05D000662",
+            "HOM05D000044",
+            "HOM05D000322",
+            "HOM05D000741",
+            "HOM05D002484",
+            "HOM05D007540",
+            "HOM05D000275",
+            "HOM05D000052",
+            "HOM05D000052",
+            "HOM05D001524" )
+)
+```
+
+Here we join together the table with the gene ID's and the table with the representative homologous gene families. 
+The result is an extra column that contains whether the gene family is PR1, PR2, ... 
+
+```{r}
+#| error: true
+#| warning: false
+#| message: false
+monocots <- monocots %>%
+  inner_join(families_monocots)
+
+dicots <- dicots %>%
+  inner_join(families_dicots)
+
+pr_genes <- bind_rows(monocots, dicots)
+
+# remove family column 
+pr_genes <- pr_genes %>%
+  select(-family) 
+
+pr_genes <- unique(pr_genes)
+```
+
+
+This code loops over each PR and counts how many genes are found in it, how many species have a gene of that PR family, ... 
+
+```{r}
+#| eval: true
+# for debugging purposes: check the number of genes per family
+# Loop through each PR family
+for (f in unique(monocots$prfam)) {
+  family_genes <- pr_genes %>% filter(prfam == f)
+  
+  # Calculate the number of unique genes and species
+  num_genes <- dim(family_genes)[1]
+  num_species <- length(unique(family_genes$species))
+  
+  # Print the results for the current family
+  cat(paste("PR Family:", f, 
+            "- Number of Genes:", num_genes, 
+            "- Number of Species:", num_species, "\n"))
+
+}
+
+```
+
+
+Now we add additional information about every species. The result is a table with gene ID's with the PR families/species.
+
+```{r}
+#| error: true
+#| warning: false
+#| message: false
+# Load species list from a file
+species_info <- read_delim("C:/Users/nawro/Documents/Bioinformatics/Design Project/DP/species_information.csv", delim = "\t", skip = 2)
+
+colnames(species_info)[1] <- "species_name"
+species_list <- species_info$common_name
+
+pr_genes <- pr_genes |>
+  left_join(species_info, by = c("species" = "species_name"))
+```
+
+
+Add taxonomic info
+
+```{r}
+#| error: true
+#| warning: false
+#| message: false
+
+# Load taxize
+library(taxize)
+
+# extract species names and ids
+species_names <- unique(pr_genes$species)
+species_to_id <- unique(pr_genes[, c("species", "tax_id")])
+
+# Filter out NAs
+ids <- unique(na.omit(species_to_id$tax_id))
+ids <- as.character(ids)
+
+# Get classification for taxon IDs
+classification_list <- classification(ids, db = "ncbi")
+
+
+# Helper function to extract a taxonomic rank
+extract_rank <- function(class_df, rank_name) {
+  if (is.null(class_df)) return(NA)
+  idx <- which(class_df$rank == rank_name)
+  if (length(idx) > 0) return(class_df$name[idx[1]])
+  return(NA)
+}
+
+# Initialize tax_info
+tax_info <- data.frame(species = species_names, order = NA, clade = NA, stringsAsFactors = FALSE)
+
+for (i in seq_along(species_names)) {
+  species <- species_names[i]
+  
+  # Get the corresponding taxon ID for this species
+  taxon_id <- species_to_id$tax_id[species_to_id$species == species]
+  
+  # Get the classification for this taxon ID
+  this_classification <- classification_list[[as.character(taxon_id)]]
+  
+  if (!is.data.frame(this_classification)) {
+    next  # Skip if classification is missing
+  }
+  
+  # Extract order and clade
+  tax_info$order[i] <- extract_rank(this_classification, "order")
+  clade_val <- extract_rank(this_classification, "clade")
+  if (is.na(clade_val)) {
+    clade_val <- extract_rank(this_classification, "class")
+  }
+  tax_info$clade[i] <- clade_val
+}
+
+# Merge taxonomic information into pr_genes by the species column
+pr_genes_taxa <- merge(pr_genes, tax_info, by = "species", all.x = TRUE)
+```
+
+## Visualize results and compare to the literature
+
+```{r}
+# Order PR families in ascending order
+pr_genes$prfam <- factor(pr_genes$prfam, levels = unique(pr_fam_names))
+```
+
+Check gene counts for arabidopsis
+```{r}
+#| eval: true
+ath_genes <- pr_genes |>
+  filter(species == "ath") |>
+  count(prfam, name="gene_count") 
+
+literature <- c(23, 70, 21, 6, 42, 7, 78, 1, 97, 3, 9, 13, 4, 23, 74, 74, 8)
+
+ath_genes$expected <- literature
+
+ath_genes$difference <- ath_genes$gene_count - ath_genes$expected
+
+write.csv(ath_genes, "ath_genes.csv", row.names = FALSE)
+print(ath_genes)
+```
+
+
+Preparation to build the tree
+
+```{r}
+# Resolve names
+resolved_names <- tnrs_match_names(species_list) #this makes species names "taxonomically correct". 
+
+
+# WHY IS THIS DONE?
+# Filter out rows where flags are 'incertae_sedis' or 'hybrid' or 'incertae_sedis_inherited'
+filtered_names <- resolved_names[!(resolved_names$flags %in% c("incertae_sedis", "hybrid", "incertae_sedis_inherited")), ]
+filtered_names <- filtered_names[!is.na(filtered_names$ott_id), ]
+
+# Convert species_order to species_name
+name1 <- resolved_names$unique_name
+name1 <- gsub(" \\(.*", "", name1)
+```
+
+Building the tree
+
+```{r}
+tree <- ape::read.tree("C:/Users/nawro/Documents/Bioinformatics/Design Project/DP/tree_combined.nwk")
+
+# Generate the tree plot
+p_tree <- ggtree(tree) +
+  geom_tiplab(size = 2, align = TRUE, linesize = 0.5) +
+  theme_tree2()
+```
+
+
+Creating a table with the gene counts for every family
+
+```{r}
+
+# Extract species order
+species_order <- rev(ggtree::get_taxa_name(p_tree))
+
+# Ensure species is a factor with the correct order
+pr_genes <- pr_genes |> 
+  mutate(species = factor(species, levels = species_order))
+
+gene_counts <- pr_genes |>
+ dplyr::count(species, prfam) |>
+ na.omit()
+
+gene_counts$log_n <- log(gene_counts$n + 1)
+```
+
+
+Adding taxonomic info to the species
+
+```{r}
+# Load in the metadata
+plaza_metadata <- read.csv("C:/Users/nawro/Documents/Bioinformatics/Design Project/DP/species_metadata_PLAZA.tsv", sep = "\t")
+
+# Join gene_counts with plaza_metadata to get the 'phylum' column
+gene_counts_extended <- gene_counts |>
+  left_join(plaza_metadata |> select(species, family, order, class), by = "species")
+  # rename(clade = phylum)  # Rename phylum to clade
+```
+
+
+Extending the tree plot with the taxonomic data
+
+```{r}
+#| error: true
+#| warning: false
+#| message: false
+
+library(ggtree)
+library(dplyr)
+library(forcats)
+library(RColorBrewer)
+
+# Step 1: Create mapping
+species_clade_mapping <- gene_counts_extended %>%
+  select(species, order) %>%
+  distinct()
+
+# Step 2: Fortify tree and join with clade info
+tree_data <- ggtree::fortify(tree) %>%
+  left_join(species_clade_mapping, by = c("label" = "species")) %>%
+  filter(!is.na(order))  # Remove NA
+
+# Step 3: Rename low-frequency orders
+tree_data_tax <- tree_data %>%
+  group_by(order) %>%
+  mutate(order = ifelse(n() <= 3, "other (N<2)", order)) %>%
+  ungroup()
+
+# Step 4: Relevel factor so "other" is last
+tree_data_tax$order <- factor(tree_data_tax$order)
+tree_data_tax$order <- fct_relevel(tree_data_tax$order, "other (N<2)", after = Inf)
+
+# Step 5: Set up custom colors
+orders <- levels(tree_data_tax$order)
+n_colors <- length(orders) - 1  # Exclude 'other' from palette
+main_colors <- colorRampPalette(brewer.pal(9, "Set1"))(n_colors)
+custom_palette <- c(main_colors, "grey")
+names(custom_palette) <- orders  # Match factor levels
+
+# Step 6: Plot
+p_tree <- ggtree(tree) +
+  geom_tippoint(data = tree_data_tax, aes(x = x, y = y, color = order), size = 1.5) +
+  scale_color_manual(values = custom_palette) +
+  theme_tree2() +
+  theme(
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    legend.position = "left",
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(0.5, "cm"),
+    legend.background = element_rect(fill = "white", color = "black", size = 0.5)
+  )
+
+p_tree
+
+
+```
+
+
+Scaling the gene counts by order and PR families to create supplementary figures.
+
+```{r}
+gene_counts_by_prfam <- gene_counts_extended %>%
+  group_by(prfam) %>%
+  mutate(log_n = log_n / max(log_n, na.rm = TRUE)) %>%
+  ungroup()
+
+gene_counts_by_order <- gene_counts_extended %>%
+  group_by(order) %>%
+  mutate(log_n = log_n / max(log_n, na.rm = TRUE)) %>%
+  ungroup()
+
+```
+
+
+Merging the PR families with identical gene counts (PR15/16).
+
+```{r}
+gene_counts_by_prfam <- gene_counts_by_prfam %>%
+  filter(prfam != "PR16") %>%
+  mutate(prfam = recode(prfam, "PR15" = "PR15/16"))
+
+gene_counts_by_order <- gene_counts_by_order %>%
+  filter(prfam != "PR16") %>%
+  mutate(prfam = recode(prfam, "PR15" = "PR15/16"))
+
+gene_counts_extended <- gene_counts_extended %>%
+  filter(prfam != "PR16") %>%
+  mutate(prfam = recode(prfam, "PR15" = "PR15/16"))
+```
+
+
+Combine the tree plot and the heatmap and create supplementary heatmaps with different scaling.
+
+```{r}
+# Generate the heatmap plot
+p_heatmap <- gene_counts_extended |> 
+  ggplot(aes(x=prfam, y=species, fill = log_n)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = brewer.pal(9, "Greens"), name = "gene log2(count + 1)") + 
+  labs(title = "Frequency of PR-encoding genes across species",
+       x = "PR family",
+       y = NULL) +
+  theme_classic()  +
+  theme(
+    axis.line.y = element_blank(),      # removes y-axis line
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.title = element_text(size = 16)
+  )
+
+# Combine tree and heatmap with adjusted widths
+final_plot <- plot_grid(
+  p_tree, p_heatmap,
+  ncol = 2,
+  align = "h",
+  axis = "tb",
+  rel_widths = c(1, 3)  # Allocate 1/4 of space to tree and 3/4 to heatmap
+)
+
+final_plot
+```
+```{r}
+ggsave("final_plot.jpeg", plot = final_plot, device = "jpeg", width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Generate the heatmap plot
+p_heatmap <- gene_counts_by_prfam |> 
+  ggplot(aes(x=prfam, y=species, fill = log_n)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = brewer.pal(9, "Greens"), name = "scaled\ngene log2(count + 1)") + 
+  labs(title = "Frequency of PR-encoding genes across species scaled by PR family",
+       x = "PR family",
+       y = NULL) +
+  theme_classic()  +
+  theme(
+    axis.line.y = element_blank(),      # removes y-axis line
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.title = element_text(size = 16)
+  )
+
+# Combine tree and heatmap with adjusted widths
+final_plot_prfam <- plot_grid(
+  p_tree, p_heatmap,
+  ncol = 2,
+  align = "h",
+  axis = "tb",
+  rel_widths = c(1, 3)  # Allocate 1/4 of space to tree and 3/4 to heatmap
+)
+
+final_plot_prfam
+```
+
+```{r}
+ggsave("final_plot_prfam.jpeg", plot = final_plot_prfam, device = "jpeg", width = 12, height = 8, dpi = 300)
+```
+
+```{r}
+# Generate the heatmap plot
+p_heatmap <- gene_counts_by_order |> 
+  ggplot(aes(x=prfam, y=species, fill = log_n)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = brewer.pal(9, "Greens"), name = "scaled\ngene log2(count + 1)") + 
+  labs(title = "Frequency of PR-encoding genes across species scaled by order",
+       x = "PR family",
+       y = NULL) +
+  theme_classic()  +
+  theme(
+    axis.line.y = element_blank(),      # removes y-axis line
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.title = element_text(size = 16)
+  )
+
+# Combine tree and heatmap with adjusted widths
+final_plot_order <- plot_grid(
+  p_tree, p_heatmap,
+  ncol = 2,
+  align = "h",
+  axis = "tb",
+  rel_widths = c(1, 3)  # Allocate 1/4 of space to tree and 3/4 to heatmap
+)
+
+final_plot_order
+```
+
+```{r}
+ggsave("final_plot_order.jpeg", plot = final_plot_order, device = "jpeg", width = 12, height = 8, dpi = 300)
+```
