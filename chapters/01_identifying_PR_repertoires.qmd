@@ -20,6 +20,7 @@ library(here)
 library(tidyverse)
 library(ggtree)
 library(patchwork)
+library(ComplexHeatmap)
 
 set.seed(123)
 ```
@@ -158,7 +159,8 @@ p_heatmap <- scaled_counts@matrix |>
     y = NULL,
     title = "Frequency of PR-encoding genes across species",
     fill = "Scaled counts"
-  )
+  ) +
+  scale_x_discrete(labels = function(x) gsub("PR-16", "PR-15/16", x))  # Change label for PR-16
 
 # Combine tree and heatmap
 p_heatmap_final <- wrap_plots(
@@ -166,6 +168,7 @@ p_heatmap_final <- wrap_plots(
   p_heatmap, 
   widths = c(0.3, 0.7)
 )
+p_heatmap_final
 ```
 
 Saving the final plot to a PNG file.
