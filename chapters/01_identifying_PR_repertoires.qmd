@@ -1,0 +1,188 @@
+---
+execute: 
+  echo: true
+  eval: false
+  warning: false
+---
+
+# Identification of plant PR gene repertoires
+
+In this document, we will describe the code to identify PR-encoding
+genes in plant genomes.
+
+We will start by loading required packages.
+
+```{r here}
+#| message: false
+#| eval: true
+
+library(here)
+library(tidyverse)
+library(ggtree)
+library(patchwork)
+
+set.seed(123)
+```
+
+## Obtaining gene repertoires
+
+After a BLAST search against the PLAZA databases (Monocots and Dicots), we
+found that PR proteins of each family are contained in the following
+PLAZA gene families.
+
+```{r}
+# PR family to PLAZA family assignments
+pr_monocots <- data.frame(
+  PR = c(
+    "PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR6", "PR6", "PR7", 
+    "PR8", "PR9", "PR10", "PR10", "PR11", "PR12", 
+    "PR13", "PR14", "PR15", "PR16", "PR17"
+  ),
+  family = c(
+    "HOM05M000176", "HOM05M000021", "HOM05M000197", "HOM05M001261",
+    "HOM05M000094", "HOM05M007126", "HOM05M000680","HOM05M000792",
+    "HOM05M000024", "HOM05M000233", "HOM05M000005", "HOM05M000737",
+    "HOM05M004276", "HOM05M002226", "HOM05M011346", "HOM05D002484",
+    "HOM05M000361", "HOM05M000050", "HOM05M000050", "HOM05M001084" 
+  )
+)
+
+pr_dicots <- data.frame(
+  PR = c(
+    "PR1", "PR2", "PR3", "PR4", "PR5", "PR6", "PR7", "PR8", "PR9", 
+    "PR10", "PR11", "PR12", "PR13", "PR14", "PR15",  "PR16", "PR17"
+  ),
+  family = c(
+    "HOM05D000217", "HOM05D000020", "HOM05D000242", "HOM05D002072",
+    "HOM05D000102", "HOM05D001004", "HOM05D000015", "HOM05D000662",
+    "HOM05D000044", "HOM05D000322", "HOM05D000741", "HOM05D002484",
+    "HOM05D007540", "HOM05D000275", "HOM05D000052", "HOM05D000052",
+    "HOM05D001524"
+  )
+)
+```
+
+We will now use these PLAZA family IDs to find PR repertoires.
+
+```{r}
+# Read family delineations from PLAZA
+plaza_families <- bind_rows(
+  read_tsv(
+    "https://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+    comment = "# ", show_col_types = FALSE,
+  ) |>
+    dplyr::rename(family = 1),
+  read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# ", show_col_types = FALSE
+) |>
+  dplyr::rename(family = 1)
+)
+
+# Get PR-encoding genes based on PLAZA IDs
+pr_genes <- bind_rows(
+  pr_monocots |> inner_join(plaza_families),
+  pr_dicots |> inner_join(plaza_families)
+) |>
+  select(PR, species, gene_id) |>
+  distinct(.keep_all = TRUE)
+```
+
+## Frequency of PR-encoding genes across species
+
+Now, we will visualize the frequency of PR genes (for each PR family) across
+species. We will first obtain a tree plot to use as phylogenetic context.
+
+```{r}
+# Read tree
+tree <- ape::read.tree(here("data", "tree_combined.nwk"))
+
+# Read species metadata
+species_meta <- read_tsv(
+  here("data", "species_metadata_plaza.tsv"),
+  show_col_types = FALSE
+) |>
+  filter(species %in% tree$tip.label)
+  
+tree <- ape::keep.tip(tree, species_meta$species)
+
+# Replace low-frequency orders with "Other"
+toreplace <- count(species_meta, order) |> filter(n <=3) |> pull(order)
+species_meta <- species_meta |>
+  mutate(Order = ifelse(order %in% toreplace, "Other", order))
+
+# Plot tree with tips colored by order
+p_tree <- ggtree(tree) %<+% species_meta +
+  geom_tippoint(aes(color = Order)) +
+  ggsci::scale_color_d3("category20")
+```
+
+Then, we will plot frequencies of PR genes across species using a heatmap.
+
+```{r}
+# Get counts as a wide matrix and get values scaled by column (PR family)
+scaled_counts <- pr_genes |>
+  dplyr::count(species, PR, .drop = FALSE) |>
+  pivot_wider(
+    names_from = PR, values_from = n, values_fill = 0
+  ) |>
+  column_to_rownames("species") |>
+  as.matrix() |>
+  ComplexHeatmap::pheatmap(scale = "column")
+
+# Pivot from wide to long and plot heatmap
+p_heatmap <- scaled_counts@matrix |>
+  as.data.frame() |>
+  rownames_to_column("species") |>
+  pivot_longer(
+    names_to = "PR", values_to = "n", cols = -species
+  ) |>
+  filter(PR != "PR15") |>
+  mutate(
+    species = factor(species, levels = rev(get_taxa_name(p_tree))),
+    PR = str_replace_all(PR, "PR", "PR-"),
+    PR = factor(PR, levels = paste0("PR-", c(1:14, 16, 17)))
+  ) |>
+  ggplot(aes(x = PR, y = species, fill = n)) +
+  geom_tile() +
+  #scale_fill_gradient(low = "#E5F5E0", high = "#006D2C")
+  scale_fill_viridis_c() +
+  theme_classic() +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
+  ) +
+  labs(
+    x = "PR family",
+    y = NULL,
+    title = "Frequency of PR-encoding genes across species",
+    fill = "Scaled counts"
+  )
+
+# Combine tree and heatmap
+p_heatmap_final <- wrap_plots(
+  p_tree + theme(legend.position = "left"), 
+  p_heatmap, 
+  widths = c(0.3, 0.7)
+)
+```
+
+Saving the final plot to a PNG file.
+
+```{r}
+ggsave(
+  p_heatmap_final, width = 10, height = 9,
+  file = "heatmap_scaled_counts.png", dpi = 300
+)
+```
+
+## Session information
+
+This document was created under the following conditions:
+
+```{r}
+#| eval: true
+#| echo: false
+sessioninfo::session_info()
+```
