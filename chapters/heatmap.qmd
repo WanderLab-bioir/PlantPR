@@ -357,15 +357,15 @@ names(custom_palette) <- orders  # Match factor levels
 # Step 6: Plot
 p_tree <- ggtree(tree) +
   geom_tippoint(data = tree_data_tax, aes(x = x, y = y, color = order), size = 1.5) +
-  scale_color_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette, name = "Order") +
   theme_tree2() +
   theme(
     plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
     legend.position = "left",
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 10),
     legend.key.size = unit(0.5, "cm"),
-    legend.background = element_rect(fill = "white", color = "black", size = 0.5)
+    legend.background = element_blank()  # This removes the frame
   )
 
 p_tree
@@ -423,12 +423,12 @@ p_heatmap <- gene_counts_extended |>
     axis.line.y = element_blank(),      # removes y-axis line
     axis.ticks.y = element_blank(),
     plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
-    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),  # Center the title
     axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
     axis.text.y = element_blank(),
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    legend.title = element_text(size = 16)
+    axis.title.x = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 10, face = "bold")
   )
 
 # Combine tree and heatmap with adjusted widths
@@ -460,12 +460,12 @@ p_heatmap <- gene_counts_by_prfam |>
     axis.line.y = element_blank(),      # removes y-axis line
     axis.ticks.y = element_blank(),
     plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
-    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),  # Center the title
     axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
     axis.text.y = element_blank(),
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    legend.title = element_text(size = 16)
+    axis.title.x = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 10, face = "bold")
   )
 
 # Combine tree and heatmap with adjusted widths
@@ -498,12 +498,12 @@ p_heatmap <- gene_counts_by_order |>
     axis.line.y = element_blank(),      # removes y-axis line
     axis.ticks.y = element_blank(),
     plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
-    plot.title = element_text(hjust = 0.5, size = 20),  # Center the title
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),  # Center the title
     axis.text.x = element_text(angle = 30, hjust = 1, size = 12),
     axis.text.y = element_blank(),
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    legend.title = element_text(size = 16)
+    axis.title.x = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 10, face = "bold")
   )
 
 # Combine tree and heatmap with adjusted widths
