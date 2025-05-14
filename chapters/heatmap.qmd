@@ -128,7 +128,7 @@ pr_genes <- pr_genes %>%
 
 pr_genes <- unique(pr_genes)
 ```
-
+ 
 
 This code loops over each PR and counts how many genes are found in it, how many species have a gene of that PR family, ... 
 
