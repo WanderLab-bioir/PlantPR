@@ -1,0 +1,219 @@
+---
+title: "CAFE5 input preparation"
+format: html
+editor: visual
+---
+
+# Input Preparation for Gene Family Analysis Evolution with CAFE5
+
+
+```{python}
+import pandas as pd
+import numpy as np 
+import os
+from Bio import Phylo
+```
+
+## Load Gene Count Data
+
+Load the combined counts of monocots and dicots:
+```{python}
+df = pd.read_csv('../data/combined_counts.csv')
+df.head(20)
+```
+
+Perform some checks to make sure the data is correct:
+```{python}
+# check for missing values in monocots and dicots
+df = df[(~df['n_monocots'].isna()) | (~df['n_dicots'].isna())]
+df = df.drop(columns=['family_group_id'])
+df.isna().sum()
+```
+
+```{python}
+print(" Check 1: Are there any rows where we have family_dicots but n_dicots is NaN?")
+print(df[(df['family_dicots'].notna()) & (df['n_dicots'].isna())].shape)
+
+print(" Check 2: Are there rows with family_monocots but n_monocots is NaN?")
+print(df[(df['family_monocots'].notna()) & (df['n_monocots'].isna())].shape)
+
+print(" Check 3: Compare how many total rows have family_dicots but missing n_dicots")
+print(df['n_dicots'].isna().sum(), df['family_dicots'].isna().sum())
+
+print(" Check 4: Compare how many total rows have family_monocots but missing n_monocots")
+print(df['n_monocots'].isna().sum(), df['family_monocots'].isna().sum())
+```
+
+Compute gene counts by species and (dicot_family, monocots families) pairs, where monocots families can be none, 1 or a list of multiple families.
+
+```{python}
+# Fill NaNs with 0 for counts
+df['n_monocots'] = df['n_monocots'].fillna(0)
+df['n_dicots'] = df['n_dicots'].fillna(0)
+
+# Aggregate by species and dicot families
+dicots_grouped = df.groupby(['species', 'family_dicots']).agg(
+    n_monocots=('n_monocots', 'sum'),
+    n_dicots=('n_dicots', 'first'),
+    family_monocots=('family_monocots', lambda x: sorted(set(x.dropna())) if x.notna().any() else pd.NA)
+).reset_index()
+
+# Compute mean counts
+dicots_grouped['mean_counts'] = (dicots_grouped['n_monocots'] + dicots_grouped['n_dicots']) / 2
+dicots_grouped.head()
+```
+
+```{python}
+# format family_monocots correctly
+new_family_monocots = []
+for t in dicots_grouped.itertuples():
+    if np.all(pd.isna(t.family_monocots)):
+        new_family_monocots.append(pd.NA)
+    elif len(t.family_monocots) == 1:
+        new_family_monocots.append(t.family_monocots[0])
+    else:
+        if pd.isna(t.family_monocots).any():
+            print(t.family_monocots)
+        new_family_monocots.append(t.family_monocots)
+
+dicots_grouped['family_monocots'] = new_family_monocots
+```
+
+Now the same for monocots and join the dataframes
+
+```{python}
+# Aggregate by species and monocots families
+monocots_grouped = df.groupby(['species', 'family_monocots']).agg(
+    n_monocots=('n_monocots', 'first'),
+    n_dicots=('n_dicots', 'sum'),
+    family_dicots=('family_dicots', lambda x: sorted(set(x.dropna())) if x.notna().any() else pd.NA)
+).reset_index()
+
+# Compute mean counts
+monocots_grouped['mean_counts'] = (monocots_grouped['n_monocots'] + monocots_grouped['n_dicots']) / 2
+
+def should_drop(val):
+    if isinstance(val, list) and len(val) == 1:
+        return pd.notna(val[0])
+    return False
+
+monocots_grouped = monocots_grouped[~monocots_grouped['family_dicots'].apply(should_drop)]
+
+# concatenate the two dataframes
+combined_df = pd.concat([monocots_grouped, dicots_grouped], ignore_index=True)
+combined_df.shape
+```
+
+Add unique family IDs for each pair of (monocots, dicots) families:
+
+```{python}
+combined_df = combined_df.copy()
+
+# Convert lists to tuples so they can be hashed
+combined_df['family_dicots_hashable'] = combined_df['family_dicots'].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+combined_df['family_monocots_hashable'] = combined_df['family_monocots'].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+
+# Combine the two columns into one tuple per row
+combined_pairs = list(zip(combined_df['family_dicots_hashable'], combined_df['family_monocots_hashable']))
+
+# Factorize assigns a unique integer to each unique tuple
+combined_df['Family ID'] = pd.factorize(combined_pairs)[0]
+
+# (Optional) drop the hashable helper columns
+combined_df = combined_df.drop(columns=['family_dicots_hashable', 'family_monocots_hashable'])
+```
+
+Save auxiliary files:
+```{python}
+# save the dataframe to a CSV file
+combined_df.to_csv('../data/combined_counts_final.csv', index=False)
+
+# save a lookup table for family IDs
+lookup_df = combined_df[['Family ID', 'family_dicots', 'family_monocots']]
+lookup_df.to_csv('../data/family_id_lookup.csv', index=False)
+```
+
+## Format for CAFE5
+
+```{python}
+combined_df = pd.read_csv('../data/combined_counts_final.csv')
+# keep only necessary columns: species, mean_counts and Family ID
+final_df = combined_df[['species', 'mean_counts', 'Family ID']].copy()
+
+# remove species whe
+final_df = final_df[final_df['mean_counts'] > 0]
+
+# transform counts to int
+final_df['mean_counts'] = final_df['mean_counts'].astype(int)
+
+final_df.head()
+```
+
+Add species common names to the dataframe:
+```{python}
+
+# load species information
+metadata1 = pd.read_csv('../data/species_information_dicots.csv', comment='#', sep='\t')[['species', 'common_name']]
+metadata2 = pd.read_csv('../data/species_information_monocots.csv', comment='#', sep='\t')[['species', 'common_name']]
+
+# make the union
+metadata = pd.concat([metadata1, metadata2], ignore_index=True)
+metadata = metadata.drop_duplicates(subset=['species']) # remove duplicates
+metadata['common_name'] = metadata['common_name'].str.replace(" ", "_") # replace spaces with underscores
+
+# put the correct species names 
+final_df = final_df.merge(metadata, on='species', how='left')
+final_df = final_df.drop(columns=['species']).rename(columns={'common_name': 'species'})
+final_df.head()
+```
+
+
+Filter species to only those in the tree
+
+```{python}
+tree = Phylo.read("../data/subset_tree.txt", "newick")
+species_in_tree = [term.name for term in tree.get_terminals()]
+species_set = set(species_in_tree)
+
+species_in_df = set(final_df['species'])
+final_df = final_df[final_df['species'].isin(species_set)]
+
+print(len(species_set), len(species_in_df),'keeping:', len(species_set.intersection(species_in_df)))
+```
+
+
+```{python}
+# pivot the dataframe to have species as columns and family IDs as rows
+pivot_df = final_df.pivot(index='Family ID', columns='species', values='mean_counts').fillna(0).astype('Int64')
+pivot_df = pivot_df.reset_index()
+pivot_df.columns.name = None
+
+# remove columns with all zeros
+pivot_df = pivot_df.loc[:, (pivot_df != 0).any(axis=0)] 
+
+# Add description column
+pivot_df['Desc'] = pivot_df['Family ID']
+cols = pivot_df.columns.tolist()
+cols = cols[-1:] + cols[:-1]
+pivot_df = pivot_df[cols]
+
+# change Desc and family ID to str, adding also a _
+pivot_df['Desc'] = pivot_df['Desc'].astype(str) + '_desc'
+pivot_df['Family ID'] = pivot_df['Family ID'].astype(str) + '_fam'
+
+pivot_df.head()
+```
+
+Save as .txt separated by tabs
+```{python}
+pivot_df.to_csv('../data/species_family_counts.txt', sep='\t', index=False)
+```
+
+Filter families based on gene counts:
+
+```{python}
+df_small = pivot_df[pivot_df.iloc[:, 2:].max(axis=1) < 70] # Filter out families where any species has ≥100 genes
+df_small = df_small[df_small.iloc[:, 2:].gt(0).sum(axis=1) >= 2] # Keep only families with gene counts in ≥2 species
+df_small.to_csv("../data/species_family_counts_small.txt", sep="\t", index=False)
+```
+
