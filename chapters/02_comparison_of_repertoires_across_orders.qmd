@@ -1,10 +1,15 @@
-# Design Project: Evolution of PR genes
+---
+execute: 
+  echo: true
+  eval: false
+  warning: false
+---
 
-## Statistical Analysis of PR distributions across orders
+# Statistical Analysis of PR distributions across orders
 
 This script contains the code to generate the statistical plot comparing the gene count distributions across different families. This is done for every PR family. 
 
-#### Load in all the necessary libraries
+Load in all the necessary libraries
 
 ```{r}
 #| message: false

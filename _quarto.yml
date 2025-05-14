@@ -6,12 +6,16 @@ book:
     Code and data for "Evolution of pathogenesis-related proteins in plants"
   author: 
     - name: Wander Labaere
-    - name: 
+    - name: Aina Perez-Rodas
+    - name: Yujin Cho
+    - name: Jan Nawrocki
   date: "year"
   chapters:
     - index.qmd
-    - chapters/chapter_01.qmd
-    - chapters/chapter_02.qmd
+    - chapters/01_identifying_PR_repertoires.qmd
+    - chapters/02_comparison_of_repertoires_across_orders.qmd
+    - chapters/get_gene_counts.qmd
+    - chapters/gene_exp_cont_visualization.qmd
   
 bibliography: bibliography.bib
 

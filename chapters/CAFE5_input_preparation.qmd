@@ -1,11 +1,11 @@
 ---
-title: "CAFE5 input preparation"
-format: html
-editor: visual
+execute: 
+  echo: true
+  eval: false
+  warning: false
 ---
 
 # Input Preparation for Gene Family Analysis Evolution with CAFE5
-
 
 ```{python}
 import pandas as pd
@@ -17,12 +17,14 @@ from Bio import Phylo
 ## Load Gene Count Data
 
 Load the combined counts of monocots and dicots:
+
 ```{python}
 df = pd.read_csv('../data/combined_counts.csv')
 df.head(20)
 ```
 
 Perform some checks to make sure the data is correct:
+
 ```{python}
 # check for missing values in monocots and dicots
 df = df[(~df['n_monocots'].isna()) | (~df['n_dicots'].isna())]
@@ -124,6 +126,7 @@ combined_df = combined_df.drop(columns=['family_dicots_hashable', 'family_monoco
 ```
 
 Save auxiliary files:
+
 ```{python}
 # save the dataframe to a CSV file
 combined_df.to_csv('../data/combined_counts_final.csv', index=False)
@@ -150,6 +153,7 @@ final_df.head()
 ```
 
 Add species common names to the dataframe:
+
 ```{python}
 
 # load species information
@@ -167,7 +171,6 @@ final_df = final_df.drop(columns=['species']).rename(columns={'common_name': 'sp
 final_df.head()
 ```
 
-
 Filter species to only those in the tree
 
 ```{python}
@@ -180,7 +183,6 @@ final_df = final_df[final_df['species'].isin(species_set)]
 
 print(len(species_set), len(species_in_df),'keeping:', len(species_set.intersection(species_in_df)))
 ```
-
 
 ```{python}
 # pivot the dataframe to have species as columns and family IDs as rows
@@ -205,6 +207,7 @@ pivot_df.head()
 ```
 
 Save as .txt separated by tabs
+
 ```{python}
 pivot_df.to_csv('../data/species_family_counts.txt', sep='\t', index=False)
 ```
@@ -216,4 +219,3 @@ df_small = pivot_df[pivot_df.iloc[:, 2:].max(axis=1) < 70] # Filter out families
 df_small = df_small[df_small.iloc[:, 2:].gt(0).sum(axis=1) >= 2] # Keep only families with gene counts in ≥2 species
 df_small.to_csv("../data/species_family_counts_small.txt", sep="\t", index=False)
 ```
-
