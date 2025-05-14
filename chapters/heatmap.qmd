@@ -515,7 +515,7 @@ final_plot_order <- plot_grid(
   rel_widths = c(1, 3)  # Allocate 1/4 of space to tree and 3/4 to heatmap
 )
 
-final_plot_order
+final_plot_order 
 ```
 
 ```{r}
