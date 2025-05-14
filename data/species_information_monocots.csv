@@ -1,0 +1,55 @@
+# PLAZA instance : monocots_05
+# File generation timestamp : Fri Sep 17 10:54:33 CEST 2021
+species	common_name	tax_id	source	data_provider	pubmed_id
+aag	Anthoceros agrestis	41834	v1.1	https://www.hornworts.uzh.ch/en.html	32170292
+aco	Ananas comosus	4615	JGI v3.0	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Acomosus	26523774
+aof	Asparagus officinalis	4686	v1.1	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Aofficinalis_er	29093472
+asa	Allium sativum	4682	V1.0	https://www.ncbi.nlm.nih.gov/genome?LinkName=bioproject_genome&from_uid=606385	32730994
+ata	Aegilops tauschii	37682	Aet V4.0	https://plants.ensembl.org/Aegilops_tauschii/Info/Annotation/#assembly	29143815
+ath	Arabidopsis thaliana	3702	Araport11	https://www.araport.org/	27862469
+atr	Amborella trichopoda	13333	JGI v1.0	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Atrichopoda	24357323
+bdi	Brachypodium distachyon	15368	JGI v3.2	https://phytozome-next.jgi.doe.gov/info/Bdistachyon_v3_2	20148030
+calsi	Calamus simplicifolius	746888	v1.0	http://gigadb.org/dataset/101052	30101322
+cbr	Chara braunii	69332	Cbr1.0	https://plants.ensembl.org/Chara_braunii/Info/Index	30007417
+cde	Ceratophyllum demersum	4428	v1.0	https://genomevolution.org/CoGe/GenomeInfo.pl?gid=56572	32094642
+cpu	Cenchrus purpureus	154765	v1.0	https://ngdc.cncb.ac.cn/search/?dbId=&q=GWHAORA00000000	33040437
+cre	Chlamydomonas reinhardtii	3055	JGI v5.5	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Creinhardtii	17932292
+ddu	Dioscorea dumetorum	167584	Trifoliate Yam v1.0	https://pub.uni-bielefeld.de/record/2941469	32143301
+dex	Digitaria exilis	1010633	Dexi_CM05836 v1	https://datadryad.org/stash/dataset/doi:10.5061/dryad.2v6wwpzj0	32901040
+ecu	Eragrostis curvula	38414	CERZOS_E.curvula1.0	https://plants.ensembl.org/Eragrostis_curvula/Info/Index	31308395
+egu	Elaeis guineensis	51953	EG5.1	http://genomsawit.mpob.gov.my	23883927
+gma	Glycine max	3847	JGI Wm82.a4.v1	https://phytozome-next.jgi.doe.gov/info/Gmax_Wm82_a4_v1	31433882
+hvu	Hordeum vulgare	4513	Morex v2	https://webblast.ipk-gatersleben.de/downloads/barley_pangenome/Morex/	33239781
+lpe	Lolium perenne	4522	2.6.1-v3	https://ryegrassgenome.ghpc.au.dk/	26408275
+mac	Musa acuminata	4641	Banana Genome v2.0	https://banana-genome-hub.southgreen.fr/download	22801500
+mbi	Magnolia biondii	86725	v1.0	https://doi.org/10.5061/dryad.s4mw6m947	33642574
+mco	Micromonas commoda	296587	JGI v3.0	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_MspRCC299	19359590
+mpo	Marchantia polymorpha	3197	JGI v3.1	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Mpolymorpha	28985561
+msi	Miscanthus sinensis	62337	v7.1	https://phytozome-next.jgi.doe.gov/info/Msinensis_v7_1	33116128
+oal	Oryza alta	52545	OAv1	https://bigd.big.ac.cn/gwh/Assembly/17984/show	33539781
+obr	Oryza brachyantha	4533	Ensembl Plants v1.4b	http://plants.ensembl.org/Oryza_brachyantha/Info/Index	23518283
+osa	Oryza sativa ssp. japonica	39947	IRGSP-1.0-2021-05-10	 https://rapdb.dna.affrc.go.jp	16100779
+osaindica	Oryza sativa ssp. indica	39946	MBKBASE v1.0	http://www.mbkbase.org/R498/	11935017
+osak	Oryza sativa Kitaake	4530	V3.2	https://phytozome-next.jgi.doe.gov/info/OsativaKitaake_v3_1	31775618
+oth	Oropetium thomaeum	1148796	COGE v2.0	https://genomevolution.org/CoGe/GenomeInfo.pl?gid=51527	31245697
+pco	Prasinoderma coloniale	156133	v1.0	https://db.cngb.org/search/?q=CNP0000924	32572216
+ped	Phyllostachys edulis	38705	GigaDBv2.0	http://gigadb.org/dataset/100498	30202850
+pha	Panicum hallii	206008	JGI v3.2	https://phytozome-next.jgi.doe.gov/info/Phallii_v3_2	30523281
+ppa	Physcomitrium patens	3218	JGI v3.3	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Ppatens	18079367
+ptr	Populus trichocarpa	3694	JGI v4.1	https://phytozome-next.jgi.doe.gov/info/Ptrichocarpa_v4_1	16973872
+sbi	Sorghum bicolor	4558	JGI v3.1	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Sbicolor	19189423
+sce	Secale cereale	4550	Rye v1.0	https://bigd.big.ac.cn/gwh/Assembly/12832/show	33737755
+sgi	Sequoiadendron giganteum	99814	V2.0	https://treegenesdb.org/org/Sequoiadendron-giganteum	32948606
+sit	Setaria italica	4555	JGI v2.2	https://phytozome.jgi.doe.gov/pz/portal.html#!bulk?org=Org_Sitalica	22580950
+sly	Solanum lycopersicum	4081	ITAG4.0	http://solgenomics.net/organism/Solanum_lycopersicum/genome	22660326
+smo	Selaginella moellendorffii	88036	v1.0	https://phytozome-next.jgi.doe.gov/info/Smoellendorffii_v1_0	21551031
+spo	Spirodela polyrhiza	29656	JGI v2.0	https://phytozome.jgi.doe.gov/pz/portal.html#!info?alias=Org_Spolyrhiza	24548928
+ssp	Saccharum spontaneum	62335	v20190103	http://www.life.illinois.edu/ming/downloads/Spontaneum_genome/	30297971
+svi	Setaria viridis	4556	Phytozome v2.1	https://phytozome-next.jgi.doe.gov/info/Sviridis_v2_1	33020633
+tae	Triticum aestivum	4565	IWGSCv2.1	https://wheat-urgi.versailles.inra.fr	25035500
+tdi	Triticum dicoccoides	85692	Ensembl	http://plants.ensembl.org/Triticum_dicoccoides/Info/Index	28684525
+ttu	Triticum turgidum	4567	v1.0	https://www.interomics.eu/durum-wheat-genome	30962619
+vpl	Vanilla planifolia	51239	Elo Vpla-A Principal v1.0	https://www.ncbi.nlm.nih.gov/bioproject/?term=PRJNA633886	
+zjn	Zoysia japonica ssp. nagirizaki	309978	Zoysia Genome Database v1.1	http://zoysia.kazusa.or.jp/	26975196
+zma	Zea mays	4577	NAM v5.0	https://plants.ensembl.org/Zea_mays/Info/Index	19965430
+zosmarina	Zostera marina	29655	v3.1	https://phytozome-next.jgi.doe.gov/info/Zmarina_v3_1	

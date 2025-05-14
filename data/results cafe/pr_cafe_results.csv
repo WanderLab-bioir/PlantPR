@@ -1,0 +1,12 @@
+Family ID,clade,original_id,FamilyID,pvalue,Significant at 0.05,PRname
+46,family_dicots,HOM05D000052,46_fam,0.0,y,PR15/16
+193,family_dicots,HOM05D000217,193_fam,0.0,y,PR1
+217,family_dicots,HOM05D000242,217_fam,0.0,y,PR3
+11805,family_dicots,HOM05D000275,11805_fam,0.0,y,PR14
+14830,family_dicots,HOM05D000322,14830_fam,0.0,y,PR10
+193,family_monocots,HOM05M000176,193_fam,0.0,y,PR1
+6119,family_monocots,HOM05M000197,6119_fam,0.036,y,PR3
+7428,family_monocots,HOM05M000094,7428_fam,0.0,y,PR5
+9368,family_monocots,HOM05M000094,9368_fam,0.0,y,PR5
+23071,family_monocots,HOM05M000361,23071_fam,0.008,y,PR14
+23382,family_monocots,HOM05M000361,23382_fam,0.021,y,PR14

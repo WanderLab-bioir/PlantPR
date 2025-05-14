@@ -1,0 +1,205 @@
+---
+execute: 
+  echo: true
+  eval: true
+  warning: false
+---
+
+# Data preprocessing for Computational Analysis of gene Family Evolution
+
+The purpose of this script is to generate the data needed for the analysis of gene family evolution in angiosperms. The output files are a CSV file with the number of genes per family and species, and a phylogenetic tree in the correct format.
+
+```{r here}
+#| message: false
+#| eval: true
+
+library(here)
+library(dbplyr)
+library(tidyverse)
+library(readr)
+library(rotl)
+library(ape)
+library(ggtree)
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
+library(ape)
+library(tidytree)
+
+set.seed(123) # for reproducibility
+```
+
+## Download gene families from PLAZA
+
+```{r}
+#| eval: true
+
+families_dicots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# "
+)
+colnames(families_dicots) <- c("family", "species", "gene_id")
+
+families_monocots <- read_tsv(
+  "https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/GeneFamilies/genefamily_data.HOMFAM.csv.gz", 
+  comment = "# "
+)
+colnames(families_monocots) <- c("family", "species", "gene_id")
+
+# join
+families <- bind_rows(families_dicots, families_monocots)
+
+# get correspondence between dicots and monocots based on gene id
+families_lookup <- families_dicots %>%
+  inner_join(families_monocots, by = c("species", "gene_id")) %>%
+  rename(family_dicots = family.x, family_monocots = family.y) %>%
+  select(family_monocots, family_dicots)
+
+# remove duplicates
+families_lookup <- families_lookup[!duplicated(families_lookup), ]
+
+head(families_lookup)
+```
+
+Count genes per family and species in both dicots and monocots:
+
+```{r}
+dicots_count <- families_dicots %>%
+  group_by(family, species) %>%
+  summarise(n_genes = n()) %>%
+  ungroup()
+
+head(dicots_count)
+```
+
+```{r}
+monocots_count <- families_monocots %>%
+  group_by(family, species) %>%
+  summarise(n_genes = n()) %>%
+  ungroup()
+head(monocots_count)
+```
+
+Match the lookup table:
+
+```{r}
+# Join dicots with lookup to get corresponding monocot families
+dicots_joined <- dicots_count %>%
+  rename(family_dicots = family, n_dicots = n_genes) %>%
+  left_join(families_lookup, by = "family_dicots")
+
+# Join monocots with lookup to get corresponding dicot families
+monocots_joined <- monocots_count %>%
+  rename(family_monocots = family, n_monocots = n_genes) %>%
+  left_join(families_lookup, by = "family_monocots")
+
+# Full join both to preserve dicot-only, monocot-only, or shared families
+combined_counts <- full_join(
+  dicots_joined,
+  monocots_joined,
+  by = c("species", "family_dicots", "family_monocots")
+) %>%
+  select(species, family_monocots, family_dicots, n_monocots, n_dicots)
+
+# Create a table of unique family combinations and assign a stable group ID
+family_groups <- combined_counts %>%
+  select(family_dicots, family_monocots) %>%
+  distinct() %>%
+  arrange(family_dicots, family_monocots) %>%
+  mutate(family_group_id = row_number())
+
+# Add family_group_id back to the combined data
+combined_counts <- combined_counts %>%
+  left_join(family_groups, by = c("family_dicots", "family_monocots"))
+
+# View result
+head(combined_counts)
+```
+
+
+Save to csv:
+
+```{r}
+#| eval: false
+
+write_csv(combined_counts, "../data/combined_counts.csv")
+```
+
+### Adding metadata
+
+```{r}
+species_metadata <- read.table("../data/species_metadata_PLAZA.tsv", sep = "\t", header=TRUE)
+
+pr_genes <- combined_counts |>
+  left_join(species_metadata, by = c("species" = "species"))
+
+head(pr_genes)
+```
+
+## Format the phylogenetic tree
+
+Read the tree nd remove species not in the gene families:
+
+```{r}
+tree <- readRDS("../data/angiowgd_tree.rds")
+
+tree_phylo <- as.phylo(tree)
+
+# get species list from pr_genes
+species_list <- unique(pr_genes$name)
+
+species_to_keep_mod <- gsub(" ", "_", species_list)
+
+# compute species in species_to_keep_mod that are not in the tree
+species_not_in_tree <- species_to_keep_mod[ ! species_to_keep_mod %in% tree_phylo$tip.label]
+
+species_in_tree <- species_to_keep_mod[species_to_keep_mod %in% tree_phylo$tip.label]
+species_in_tree <- species_in_tree[order(species_in_tree)]
+
+tips_to_drop <- tree_phylo$tip.label[ ! tree_phylo$tip.label %in% species_to_keep_mod]
+subset_tree <- drop.tip(tree_phylo, tips_to_drop)
+
+print(subset_tree)
+```
+
+Make sure the tree is rooted, binary, and ultrametric. Then save the tree in newick format:
+
+```{r}
+# Check current tree properties
+cat("Initial tree properties:\n")
+cat("  Rooted:      ", is.rooted(subset_tree), "\n")
+cat("  Binary:      ", is.binary(subset_tree), "\n")
+cat("  Ultrametric: ", is.ultrametric(subset_tree), "\n\n")
+
+# 1. Ensure the tree is rooted
+if (!is.rooted(subset_tree)) {
+  cat("Tree is not rooted. Rooting the tree...\n")
+  # Here, we're using the first tip as an example outgroup.
+  # Replace with an appropriate outgroup if necessary.
+  subset_tree <- root(subset_tree, outgroup = "Glycine_max", resolve.root = TRUE)
+}
+
+# 2. Ensure the tree is binary (fully bifurcating)
+if (!is.binary(subset_tree)) {
+  cat("Tree is not binary. Resolving polytomies...\n")
+  subset_tree <- multi2di(subset_tree)
+}
+
+# 3. Ensure the tree is ultrametric
+if (!is.ultrametric(subset_tree)) {
+  cat("Tree is not ultrametric. Converting tree to ultrametric using chronos...\n")
+  # 'chronos' uses a relaxed clock model to produce an ultrametric tree.
+  subset_tree <- chronos(subset_tree)
+}
+
+# Check properties again after processing
+cat("\nProcessed tree properties:\n")
+cat("  Rooted:      ", is.rooted(subset_tree), "\n")
+cat("  Binary:      ", is.binary(subset_tree), "\n")
+cat("  Ultrametric: ", is.ultrametric(subset_tree), "\n\n")
+
+# Save the tree in Newick format
+write.tree(subset_tree, file = "../data/subset_tree.txt")
+cat("Tree saved to 'subset_tree.newick'\n")
+```
+

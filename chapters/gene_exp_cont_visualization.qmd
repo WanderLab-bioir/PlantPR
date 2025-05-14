@@ -1,0 +1,318 @@
+---
+execute: 
+  echo: true
+  eval: true
+  warning: false
+---
+
+# Visualization of Gene Family Evolution across a phylogenetic tree
+
+This script processes the CAFE5 results in order t analyze the gene gain and loss of PR gene families across the phylogeny of plant orders. It creates visualizations of the gene family dynamics and summarizes the results in a table.
+
+
+```{r here}
+#| message: false
+#| eval: true
+
+library(here)
+library(dbplyr)
+library(tidyverse)
+library(readr)
+library(rotl)
+library(ape)
+library(ggtree)
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
+library(ape)
+library(tidytree)
+library(treeio)
+library(readr)
+
+set.seed(123) # for reproducibility
+```
+
+## Read and process CAFE5 output files
+
+Read the gene increase and decrease data from CAFE5 results:
+
+```{r}
+clade_data <- read_tsv("../cafe5/results cafe/Base_clade_results.txt", comment = "#", col_names = c("Taxon_ID", "Increase", "Decrease"))
+clade_data$Node <- gsub(".*<(\\d+)>.*", "\\1", clade_data$Taxon_ID)
+clade_data$Taxon <- gsub("<\\d+>", "", clade_data$Taxon_ID)
+clade_data
+```
+
+Read the tree from CAFE5 results:
+```{r}
+# Read raw lines
+lines <- readLines("../cafe5/results cafe/Base_asr.tre")
+
+# Extract the line starting with "TREE"
+tree_line <- grep("^\\s*TREE\\s", lines, value = TRUE)[1]
+
+# Extract Newick part after the "=" sign
+newick <- sub(".*=\\s*", "", tree_line)
+
+# Optional: save the Newick to a separate file for loading
+writeLines(newick, "cafe_tree.nwk")
+
+# Now read it
+tree <- read.tree("cafe_tree.nwk")
+tree$edge.length <- NULL
+p <- ggtree(tree)
+```
+
+Extract the node labels:
+
+```{r}
+label_table <- data.frame(
+  label = tree$node.label,
+  node = (length(tree$tip.label) + 1):(length(tree$tip.label) + tree$Nnode)
+)
+
+# Extract just the numeric ID from CAFE notation
+label_table$cafe_id <- gsub(".*<(\\d+)>.*", "\\1", label_table$label)
+```
+
+Load pr families results:
+```{r}
+pr_families <- read_csv("../cafe5/results cafe/pr_cafe_results.csv")
+pr_family_ids <- unique(pr_families$FamilyID)  # Adjust column name if needed
+```
+
+Load the gene change data per node and filter to only PR families:
+```{r}
+# This file has changes (Inc/Dec) per family per node
+change_data <- read_tsv("../cafe5/results cafe/Base_change.tab")
+change_pr <- change_data %>%
+  filter(FamilyID %in% pr_family_ids)
+```
+
+Format the data for the plot and add labels with gene gain and gene loss per node:
+```{r}
+# Exclude 'FamilyID' column, pivot longer
+change_long <- change_pr %>%
+  pivot_longer(
+    -FamilyID,
+    names_to = "NodeLabel",
+    values_to = "Change"
+  )
+
+node_changes <- change_long %>%
+  filter(grepl("^<\\d+>$", NodeLabel)) %>%
+  mutate(cafe_id = gsub("[<>]", "", NodeLabel)) %>%
+  group_by(cafe_id) %>%
+  summarise(
+    Increase = sum(Change[Change > 0], na.rm = TRUE),
+    Decrease = abs(sum(Change[Change < 0], na.rm = TRUE)),
+    label = paste0("+", Increase, " / -", Decrease)
+  )
+node_changes <- node_changes %>%
+  filter(!(Increase == 0 & Decrease == 0))
+
+annot_nodes <- inner_join(label_table, node_changes, by = "cafe_id")
+plot_data <- left_join(p$data, annot_nodes, by = "node")
+plot_data$label[plot_data$isTip] <- gsub(
+  "^([A-Z])[a-z]+_([a-z]+)<\\d+>.*$",
+  "\\1. \\2",
+  plot_data$label[plot_data$isTip]
+)
+plot_data
+```
+
+Add metada from PLAZA:
+```{r}
+metadata <- read_tsv("species_metadata_PLAZA.tsv")
+metadata <- metadata %>%
+    mutate(label = paste0(substr(word(name, 1), 1, 1), ". ", word(name, 2)))
+head(metadata)
+```
+
+```{r}
+plot_data <- left_join(plot_data, metadata %>% select(label, order), by = "label")
+plot_data$order <- as.factor(plot_data$order)
+plot_data <- droplevels(plot_data)
+```
+
+## Visualizations
+
+### PR genes evolution
+
+Format the data for plotting:
+```{r}
+# Count number of species per order (for tips only)
+order_counts <- plot_data %>%
+  filter(isTip) %>%
+  count(order, name = "n_species")
+
+# Replace orders with ≤ 2 species (or NA) with "Other"
+plot_data <- plot_data %>%
+  left_join(order_counts, by = "order") %>%
+  mutate(order_clean = ifelse(n_species <= 2 | is.na(order), "Other", as.character(order))) %>%
+  mutate(order_clean = factor(order_clean))  # recreate factor with clean labels
+
+# Generate up to 20 distinct colors from Set3
+n_orders <- length(unique(plot_data$order_clean))
+palette <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(n_orders)
+```
+
+Create a expansions/contractions tree of the PR genes:
+
+```{r}
+# ✅ Rename tip labels BEFORE plotting
+tree$tip.label <- gsub(
+  "^([A-Z])[a-z]+_([a-z]+)<\\d+>.*$",
+  "\\1. \\2",
+  tree$tip.label
+)
+
+# Build the tree and map in data
+p <- ggtree(tree, layout = "fan") %<+% plot_data +
+  geom_tree(color = "gray60", size = 0.3, alpha = 0.7) +
+  theme_tree2()
+
+final_plot <- p +
+  geom_tippoint(aes(fill = order_clean), shape = 21, size = 3, color = "black") +
+  geom_tiplab(size = 6, color = "black", offset = 0.5) +
+  geom_label2(
+    data = plot_data %>% filter(!is.na(label.y)),
+    aes(label = label.y),
+    size = 4,
+    fill = "white",
+    color = "black",
+    fontface = "bold"
+  ) +
+  scale_fill_manual(values = palette, name = "Order") +
+  guides(color = guide_legend(override.aes = list(shape = 21, size = 5))) +
+  ggtitle("Gene Expansion / Contraction of PR Families") +
+  theme_tree2() +
+  theme(
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    plot.title = element_text(size = 24, face = "bold", hjust = 0.5)
+  )
+
+
+# Save as PDF
+ggsave("pr_genes_tree.png", plot = final_plot, width = 20, height = 20, units = "in")
+```
+
+### PR families evolution
+
+Compute expansion and contraction of PR families per node:
+
+```{r}
+# Join with PRname
+change_long <- change_long %>%
+  left_join(pr_families %>% select(FamilyID, PRname), by = "FamilyID") %>%
+  mutate(NodeLabel = gsub(".*<(\\d+)>.*", "\\1", NodeLabel))
+
+# Count number of unique PR families that expand or contract per node
+family_change_counts <- change_long %>%
+  filter(grepl("^\\d+$", NodeLabel)) %>%
+  mutate(cafe_id = NodeLabel,
+         Direction = case_when(
+           Change > 0 ~ "Expansion",
+           Change < 0 ~ "Contraction",
+           TRUE ~ "NoChange"
+         )) %>%
+  filter(Direction != "NoChange") %>%
+  distinct(cafe_id, PRname, Direction) %>%
+  pivot_wider(
+    names_from = Direction,
+    values_from = PRname,
+    values_fn = length,
+    values_fill = 0
+  ) %>%
+  mutate(label = paste0("+", Expansion, " / -", Contraction))
+```
+
+Prepare plot data:
+
+```{r}
+# Join with node labels
+annot_families <- inner_join(label_table, family_change_counts, by = "cafe_id")
+plot_data_fam <- left_join(p$data, annot_families, by = "node")
+
+# Reuse tip labels
+plot_data_fam$label[plot_data_fam$isTip] <- gsub(
+  "^([A-Z])[a-z]+_([a-z]+)<\\d+>.*$",
+  "\\1. \\2",
+  plot_data_fam$label[plot_data_fam$isTip]
+)
+
+# Add order colors
+plot_data_fam <- left_join(plot_data_fam, metadata %>% select(label, order), by = "label")
+
+order_counts <- plot_data_fam %>%
+  filter(isTip) %>%
+  count(order.y, name = "n_species")
+
+plot_data_fam <- plot_data_fam %>%
+  left_join(order_counts, by = "order.y") %>%
+  mutate(Order = ifelse(n_species.x <= 2 | is.na(order.y), "Other", as.character(order.y)),
+         Order = factor(Order))
+
+plot_data_fam
+```
+
+Create tree visualization for PR families:
+
+```{r}
+
+# Plot
+p_fam <- ggtree(tree, layout = "fan") %<+% plot_data_fam +
+  geom_tree(color = "gray60", size = 0.3, alpha = 0.7) +
+  theme_tree2()
+
+final_plot_fam <- p_fam +
+  geom_tippoint(aes(fill = Order), shape = 21, size = 5, color = "black") +
+  geom_tiplab(size = 6, color = "black", offset = 0.5) +
+  geom_label2(
+    data = plot_data_fam %>% filter(!is.na(label.y.y)),
+    aes(label = label.y.y),
+    size = 4,
+    fill = "white",
+    color = "black",
+    fontface = "bold"
+  ) +
+  scale_fill_manual(values = palette, name = "Order") +
+  guides(color = guide_legend(override.aes = list(shape = 21, size = 6))) +
+  ggtitle("Number of PR Gene Families Expanded / Contracted per Node") +
+  theme_tree2() +
+  theme(
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    plot.title = element_text(size = 26, face = "bold", hjust = 0.5)
+  )
+
+ggsave("pr_families_tree.png", plot = final_plot_fam, width = 20, height = 20, units = "in")
+```
+
+
+Create a summary table of PR family dynamics:
+```{r}
+# Summarize per PR family: across nodes
+pr_family_dynamics <- change_pr %>%
+  pivot_longer(-FamilyID, names_to = "NodeLabel", values_to = "Change") %>%
+  left_join(pr_families %>% select(FamilyID, PRname), by = "FamilyID") %>%
+  filter(grepl("^<\\d+>$", NodeLabel), Change != 0) %>%
+  mutate(
+    Node = gsub("[<>]", "", NodeLabel),
+    Direction = if_else(Change > 0, "Expansion", "Contraction")
+  ) %>%
+  distinct(Node, PRname, Direction) %>%
+  count(PRname, Direction, name = "NumEvents") %>%
+  pivot_wider(
+    names_from = Direction,
+    values_from = NumEvents,
+    values_fill = 0
+  )
+
+# Save the table
+write_csv(pr_family_dynamics, "pr_family_dynamics.csv")
+
+# View result
+pr_family_dynamics
+```
